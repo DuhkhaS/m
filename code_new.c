@@ -11,7 +11,22 @@
 #define GET_PFN(X) X & 0x7FFFFFFFFFFFFF
 
 char path_buf [0x100] = {};
+int start_pfn[3];
 uint64_t read_val, file_offset;
+int read_zoneinfo(){
+	FILE *f;
+	char temp[200];
+	int i = 0;
+	char *path_zone = "/proc/zoneinfo";
+	f = fopen(path_zone,"r");
+	while(!feof(f)){
+		fgets(temp,1000,f);
+		if(strstr(temp,"start_pfn")){	
+			sscanf(temp," start_pfn: %d",&start_pfn[i++]);
+		}
+	}
+	fclose(f);
+}
 
 int read_pagemap(char *path_buf,unsigned long virt_addr){
 	int c;
@@ -54,10 +69,10 @@ int read_pagemap(char *path_buf,unsigned long virt_addr){
 		printf("PFN: 0x%llx\n",(unsigned long long) GET_PFN(read_val));
 		unsigned long long int phy = (unsigned long long)GET_PFN(read_val);	
 		
-		if(phy<4096)	{
+		if(phy<start_pfn[1]){
 			printf("DMA\n");		
 		}
-		else if(phy<=1048576)	{
+		else if(phy<start_pfn[2]){
 			printf("DMA32\n");
 		}
 		else{
@@ -137,7 +152,9 @@ int main(int argc,char **argv)
 		printf("Can't print more than 1 pid\n");	
 	}
 	else{
+		read_zoneinfo();
 		mem_use(argv[1]);
+		
 	}
 	return 0;
 }
