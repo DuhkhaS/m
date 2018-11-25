@@ -9,7 +9,11 @@
 #define PAGEMAP_ENTRY 8
 #define GET_BIT(X,Y) (X & ((uint64_t)1<<Y)) >> Y
 #define GET_PFN(X) X & 0x7FFFFFFFFFFFFF
-
+/*global summary space size*/
+int dma = 0;//initial space = 0 kB
+int dma32 = 0;
+int normal = 0;
+/*end of global summary space*/
 char path_buf [0x100] = {};
 int start_pfn[3];
 uint64_t read_val, file_offset;
@@ -31,6 +35,7 @@ int read_zoneinfo(){
 int read_pagemap(char *path_buf,unsigned long virt_addr){
 	int c;
 	int status;
+	int re = 0;
 	FILE *f;
 	f = fopen(path_buf,"rb");
 	if(!f){
@@ -70,13 +75,16 @@ int read_pagemap(char *path_buf,unsigned long virt_addr){
 		unsigned long long int phy = (unsigned long long)GET_PFN(read_val);	
 		
 		if(phy<start_pfn[1]){
-			printf("DMA\n");		
+			//printf("DMA\n");	
+			re = 1;	
 		}
 		else if(phy<start_pfn[2]){
-			printf("DMA32\n");
+			//printf("DMA32\n");
+			re = 2;
 		}
 		else{
-			printf("Normal\n");	
+			//printf("Normal\n");	
+			re = 3;
 		}
 	}
    	else
@@ -84,17 +92,30 @@ int read_pagemap(char *path_buf,unsigned long virt_addr){
    	if(GET_BIT(read_val, 62))
       	printf("Page swapped\n");
 	fclose(f);
-   	return 0;
+   	return re;
 }
 void to_physical(char *pid,unsigned long *virt_addr,int n,int *size){
 	//printf("%d\n",n);
 	sprintf(path_buf, "/proc/%s/pagemap", pid);
-	
+	int re;
 	for(int i = 0;i < n;i++){
-		read_pagemap(path_buf,virt_addr[i]);	
-		printf("Size: %d\n",size[i]);
+		re = read_pagemap(path_buf,virt_addr[i]);	
+		printf("field %s Size: %d\n",re==1?"DMA":re==2?"DMA32":re==3?"Normal":"non",size[i]);
+		if(re == 1){
+		dma +=size[i];		
+		}
+		else if(re == 2){
+		dma32 +=size[i];	
+		}
+		else if(re == 3){
+		normal +=size[i];
+		}
 		printf("-----------------------------\n");
 	}
+	printf("Summary space use in each zone\n");
+	printf("DMA 	: %8d kB\n",dma);
+	printf("DMA32 	: %8d kB\n",dma32);
+	printf("Normal	: %8d kB\n",normal);
 }
 
 void mem_use(char *pids){
